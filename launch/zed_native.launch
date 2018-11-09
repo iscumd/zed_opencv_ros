@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+
+<launch>
+        <node pkg="zed_opencv_ros" type="zed_opencv_ros_node" name="zed_opencv_ros" output="screen">
+                <param name="serial_number" value="3647" />
+                <param name="cam_id" value="1" />
+        </node>
+</launch>
+
