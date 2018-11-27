@@ -43,6 +43,9 @@ class ZedNativeHandler
     int mCamResWidth;
     int mCamResHeight;
     int mCamFps;
+    int mPublishGray;
+    int mPublishRectified;
+    int mPublishRaw;
     unsigned int mZedSN;
 
     cv::Mat mCamDistLeft;
@@ -87,11 +90,14 @@ bool ZedNativeHandler::Init()
     mPrivateNH.param<int>("resolution_width", mCamResWidth, 1280);
     mPrivateNH.param<int>("resolution_height", mCamResHeight, 720);
     mPrivateNH.param<int>("cam_fps", mCamFps, 30);
+    mPrivateNH.param<int>("publish_gray", mPublishGray, 1);
+    mPrivateNH.param<int>("publish_rectified", mPublishRectified, 1);
+    mPrivateNH.param<int>("publish_raw", mPublishRaw, 0);
     mPrivateNH.param<std::string>("left_camera_optical_frame", mLeftCamOptFrameId, "left_camera_optical_frame");
     mPrivateNH.param<std::string>("right_camera_optical_frame", mRightCamOptFrameId, "right_camera_optical_frame");
 
-    std::string img_topic = "image_rect_color";
-    std::string img_raw_topic = "image_raw_color";
+    std::string img_topic = mPublishGray ? "image_rect_gray" : "image_rect_color";
+    std::string img_raw_topic = mPublishGray ? "image_raw_gray" : "image_raw_color";
     std::string left_topic = "left/" + img_topic;
     std::string left_raw_topic = "left/" + img_raw_topic;
     std::string left_cam_info_topic = "left/camera_info";
@@ -109,14 +115,22 @@ bool ZedNativeHandler::Init()
     mRightCamInfoMsg = sensor_msgs::CameraInfoPtr(new sensor_msgs::CameraInfo());
 
     image_transport::ImageTransport it(mNH);
-    mPubLeft = it.advertise(left_topic, 1);
-    ROS_INFO_STREAM("Advertised on topic " << left_topic);
-    mPubRawLeft = it.advertise(left_raw_topic, 1);
-    ROS_INFO_STREAM("Advertised on topic " << left_raw_topic);
-    mPubRight = it.advertise(right_topic, 1);
-    ROS_INFO_STREAM("Advertised on topic " << right_topic);
-    mPubRawRight = it.advertise(right_raw_topic, 1);
-    ROS_INFO_STREAM("Advertised on topic " << right_raw_topic);
+
+    if (mPublishRectified)
+    {
+        mPubLeft = it.advertise(left_topic, 1);
+        ROS_INFO_STREAM("Advertised on topic " << left_topic);
+        mPubRight = it.advertise(right_topic, 1);
+        ROS_INFO_STREAM("Advertised on topic " << right_topic);
+    }
+
+    if (mPublishRaw)
+    {
+        mPubRawLeft = it.advertise(left_raw_topic, 1);
+        ROS_INFO_STREAM("Advertised on topic " << left_raw_topic);
+        mPubRawRight = it.advertise(right_raw_topic, 1);
+        ROS_INFO_STREAM("Advertised on topic " << right_raw_topic);
+    }
 
     mPubLeftCamInfo = mNH.advertise<sensor_msgs::CameraInfo>(left_cam_info_topic, 1);
     ROS_INFO_STREAM("Advertised on topic " << left_cam_info_topic);
@@ -166,10 +180,18 @@ void ZedNativeHandler::Run()
 
         PublishCamInfo(mLeftCamInfoMsg, mPubLeftCamInfo, time_stamp);
         PublishCamInfo(mRightCamInfoMsg, mPubRightCamInfo, time_stamp);
-        PublishImage(left_raw, mPubRawLeft, mLeftCamOptFrameId, time_stamp);
-        PublishImage(right_raw, mPubRawRight, mRightCamOptFrameId, time_stamp);
-        PublishImage(left_rect, mPubLeft, mLeftCamOptFrameId, time_stamp);
-        PublishImage(right_rect, mPubRight, mRightCamOptFrameId, time_stamp);
+
+        if (mPublishRaw)
+        {
+            PublishImage(left_raw, mPubRawLeft, mLeftCamOptFrameId, time_stamp);
+            PublishImage(right_raw, mPubRawRight, mRightCamOptFrameId, time_stamp);
+        }
+
+        if (mPublishRectified)
+        {
+            PublishImage(left_rect, mPubLeft, mLeftCamOptFrameId, time_stamp);
+            PublishImage(right_rect, mPubRight, mRightCamOptFrameId, time_stamp);
+        }
 
         ros::spinOnce();
         loop_rate.sleep();
@@ -246,7 +268,16 @@ void ZedNativeHandler::PublishCamInfo(sensor_msgs::CameraInfoPtr camInfoMsg, ros
 
 void ZedNativeHandler::PublishImage(cv::Mat img, image_transport::Publisher &pubImg, std::string imgFrameId, ros::Time t)
 {
-    sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", img).toImageMsg();
+    sensor_msgs::ImagePtr msg;
+    if (mPublishGray)
+    {
+        cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
+        msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", img).toImageMsg();
+    }
+    else
+    {
+        msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", img).toImageMsg();
+    }
     msg->header.stamp = t;
     msg->header.frame_id = imgFrameId;
     pubImg.publish(msg);

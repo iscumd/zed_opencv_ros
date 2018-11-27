@@ -4,6 +4,12 @@
         <node pkg="zed_opencv_ros" type="zed_opencv_ros_node" name="zed_opencv_ros" output="screen">
                 <param name="serial_number" value="3647" />
                 <param name="cam_id" value="1" />
+                <param name="resolution_width" value="1280" />
+                <param name="resolution_height" value="720" />
+                <param name="cam_fps" value="30" />
+                <param name="publish_gray" value="1" />
+                <param name="publish_rectified" value="1" />
+                <param name="publish_raw" value="0" />              
         </node>
 </launch>
 
